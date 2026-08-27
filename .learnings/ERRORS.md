@@ -16,3 +16,7 @@ Command failures and integration errors.
 - 2026-08-10: Initial Node-based patch matched only LF while repository files use CRLF; no files were changed, then the patch flow was adjusted to normalize line endings in memory.
 
 - 2026-08-10: Python import validation could not run because the workspace interpreter lacks the Flask dependency; py_compile still passed.
+
+- 2026-08-27: `npm run build` from `web` did not start because the Windows sandbox failed during setup refresh (`helper_unknown_error`); retry from the repository root using `cd web; npm run build`.
+- 2026-08-27: Root-directory retry reached PowerShell but `npm.ps1` was blocked by execution policy; invoke `npm.cmd` instead of changing system policy.
+- 2026-08-27: `npm.cmd run build` ran webpack but failed on an existing unresolved import: `bootstrap/js/src/index.js` is absent from `web/node_modules/bootstrap`; no dependency or configuration changes were made.

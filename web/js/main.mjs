@@ -1,4 +1,4 @@
-﻿import 'jquery/src/jquery.js';
+import 'jquery/src/jquery.js';
 import 'jquery-migrate/src/migrate.js';
 import Popper from 'popper.js/dist/esm/popper.js';
 import {
@@ -127,7 +127,7 @@ function addPlaylistItem(item) {
   pl_index_element.html(item.index + 1);
   pl_title_element.html(item.title);
   pl_artist_element.html(item.artist);
-  pl_user_element.text(item.user ? '馃懁 ' + item.user : '');
+  pl_user_element.text(item.user ? '👤 ' + item.user : '');
   pl_user_element.toggleClass('d-none', !item.user);
   pl_type_element.html(item.type);
   pl_path_element.html(item.path);
@@ -1672,7 +1672,7 @@ async function loadSessionUser() {
     const response = await fetch('/api/session_user');
     const data = await response.json();
     if (!response.ok) throw new Error('session user failed');
-    el.textContent = data.user ? '馃懁 ' + data.user : '';
+    el.textContent = data.user ? '👤 ' + data.user : '';
     if (data.is_admin) {
       const navLink = document.getElementById('nav-accounts-link');
       if (navLink) navLink.classList.remove('d-none');
