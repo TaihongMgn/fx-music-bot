@@ -48,7 +48,7 @@ export function setProgressBar(bar, progress, text = '') {
 }
 
 export function secondsToStr(seconds) {
-  seconds = Math.floor(seconds);
+  seconds = Math.max(0, Math.floor(Number(seconds)) || 0);
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
   return ('00' + mins).slice(-2) + ':' + ('00' + secs).slice(-2);

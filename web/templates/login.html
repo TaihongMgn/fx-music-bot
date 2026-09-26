@@ -5,22 +5,27 @@
     <meta charset="UTF-8">
     <title>{{ tr('login_title') }}</title>
     <link rel="icon" href="static/image/favicon.ico">
-    <link rel="stylesheet" href="static/css/dark.css?v=20260926o">
+    <link id="pagestyle" rel="stylesheet" href="static/css/dark.css?v=20260926p">
+    <script>
+        if (localStorage.getItem('darkTheme') === 'false') {
+            document.getElementById('pagestyle').href = 'static/css/main.css?v=20260926p';
+        }
+    </script>
     <style>
         html, body { min-height: 100%; }
-        body { display: flex; align-items: center; justify-content: center; padding: 32px 16px; }
+        body { display: flex; align-items: center; justify-content: center; padding: 32px 16px; color: var(--ink); background-color: var(--canvas); }
         .auth-shell { width: 100%; max-width: 400px; }
-        .auth-card { background: rgba(28, 28, 30, .92); border: 0; border-radius: 22px; box-shadow: 0 24px 70px rgba(0,0,0,.45); }
+        .auth-card { background-color: var(--grouped); color: var(--ink); border: 0; border-radius: 22px; box-shadow: var(--shadow); }
         .auth-card + .auth-card { margin-top: 16px; }
         .auth-brand { display: flex; align-items: center; gap: 12px; justify-content: center; margin-bottom: 28px; }
         .auth-brand img { width: 36px; height: 36px; border-radius: 10px; }
-        .auth-brand h1 { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Microsoft YaHei", sans-serif; font-size: 22px; font-weight: 700; letter-spacing: -0.022em; margin: 0; }
+        .auth-brand h1 { font-family: var(--sans); font-size: 22px; font-weight: 700; letter-spacing: -0.022em; margin: 0; color: var(--ink); }
         .auth-card-body { padding: 28px 24px 22px; }
         .auth-message { border-radius: 12px; padding: 10px 12px; margin-bottom: 16px; }
-        .auth-error { color: #ffd1cc; background: rgba(255, 69, 58, .18); }
-        .auth-success { color: #d8ffe8; background: rgba(48, 209, 88, .18); }
+        .auth-error { color: var(--danger); background: rgba(255, 59, 48, .12); }
+        .auth-success { color: #248a3d; background: rgba(48, 209, 88, .16); }
         .auth-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-top: 18px; }
-        .auth-actions a { color: #0a84ff; font-weight: 600; }
+        .auth-actions a { color: var(--tint); font-weight: 600; }
         @media (max-width: 480px) {
             body { padding: 16px 12px; }
             .auth-card-body { padding: 22px 16px; }

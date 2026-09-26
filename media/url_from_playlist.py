@@ -12,7 +12,8 @@ log = logging.getLogger("bot")
 def get_playlist_info(url, start_index=0, user=""):
     ydl_opts = {
         'extract_flat': 'in_playlist',
-        'verbose': var.config.getboolean('debug', 'youtube_dl')
+        'verbose': var.config.getboolean('debug', 'youtube_dl'),
+        'proxy': '',
     }
 
     cookie = var.config.get('youtube_dl', 'cookie_file')

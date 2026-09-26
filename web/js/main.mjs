@@ -1777,7 +1777,7 @@ if (accountsRegisterForm) {
   });
 }
 
-// 鍒囧埌璐﹀彿绠＄悊瑙嗗浘鏃跺埛鏂板垪琛?
+// Refresh the account list when opening account management.
 const navAccountsLink = document.getElementById('nav-accounts-link');
 if (navAccountsLink) {
   navAccountsLink.addEventListener('click', () => {
@@ -2173,7 +2173,12 @@ function updatePlayerPlayhead(playhead) {
     setPlayerPlayhead(player_playhead_position);
     if (playing) {
       playhead_timer = setInterval(function() {
+        const duration = currentPlayingItem && currentPlayingItem.duration;
         player_playhead_position += 0.3;
+        if (duration > 0 && player_playhead_position >= duration) {
+          player_playhead_position = duration;
+          clearInterval(playhead_timer);
+        }
         setPlayerPlayhead(player_playhead_position);
       }, 300); // delay in milliseconds
     }
@@ -2195,27 +2200,39 @@ playerBarBox.addEventListener('mousedown', function() {
   }
 });
 
-playerBarBox.addEventListener('mouseup', function(event) {
+function playheadPercent(event) {
+  const width = playerBarBox.clientWidth;
+  if (!width) return 0;
+  const ratio = (event.clientX - playerBarBox.getBoundingClientRect().x) / width;
+  if (!Number.isFinite(ratio)) return 0;
+  return Math.min(1, Math.max(0, ratio));
+}
+
+function endPlayheadDrag(event) {
   playerBarBox.removeEventListener('mousemove', playheadDragged);
-  const percent = (event.clientX - playerBarBox.getBoundingClientRect().x) / playerBarBox.clientWidth;
+  if (!playhead_dragging) return;
+  playhead_dragging = false;
+  if (!currentPlayingItem || !(currentPlayingItem.duration > 0)) return;
+  const percent = playheadPercent(event);
+  setPlayerPlayhead(percent * currentPlayingItem.duration);
   request('post', {
     move_playhead: percent * currentPlayingItem.duration,
   });
-  playhead_dragging = false;
-});
+}
+
+playerBarBox.addEventListener('mouseup', endPlayheadDrag);
+document.addEventListener('mouseup', endPlayheadDrag);
 
 function setPlayerPlayhead(position) {
-  const duration = currentPlayingItem ? currentPlayingItem.duration : 0;
-  setProgressBar(playerBar, duration ? position / duration : 0);
-  if (playerTime) playerTime.textContent = secondsToStr(position);
+  const duration = currentPlayingItem && currentPlayingItem.duration > 0 ? currentPlayingItem.duration : 0;
+  const safe = duration ? Math.min(Math.max(position, 0), duration) : Math.max(0, position || 0);
+  setProgressBar(playerBar, duration ? safe / duration : 0);
+  if (playerTime) playerTime.textContent = secondsToStr(safe);
 }
 
 function playheadDragged(event) {
-  const percent = (event.clientX - playerBarBox.getBoundingClientRect().x) / playerBarBox.clientWidth;
-  setProgressBar(playerBar, percent);
-  if (playerTime && currentPlayingItem) {
-    playerTime.textContent = secondsToStr(percent * currentPlayingItem.duration);
-  }
+  if (!currentPlayingItem || !(currentPlayingItem.duration > 0)) return;
+  setPlayerPlayhead(playheadPercent(event) * currentPlayingItem.duration);
 }
 
 

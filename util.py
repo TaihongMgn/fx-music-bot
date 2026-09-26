@@ -20,6 +20,18 @@ import traceback
 import requests
 from packaging import version
 
+# Never use HTTP(S)_PROXY or the operating-system proxy. The container
+# reaches music services directly.
+_session_init = requests.Session.__init__
+
+
+def _session_init_without_proxy(self, *args, **kwargs):
+    _session_init(self, *args, **kwargs)
+    self.trust_env = False
+
+
+requests.Session.__init__ = _session_init_without_proxy
+
 import yt_dlp as youtube_dl
 YT_PKG_NAME = 'yt-dlp'
 

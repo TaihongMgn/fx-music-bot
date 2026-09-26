@@ -16,10 +16,7 @@ class NeteaseClient:
     def __init__(self, api_base_url):
         self.api_base_url = (api_base_url or "").rstrip("/")
         self.timeout = 10
-        # The API is on localhost. System proxy (for example 127.0.0.1:7897)
-        # must not intercept it, or QR login fails while the page stays blank.
         self.session = requests.Session()
-        self.session.trust_env = False
 
     def _get(self, endpoint, params=None):
         if not self.api_base_url:

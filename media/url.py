@@ -127,7 +127,8 @@ class URLItem(BaseItem):
     def _get_info_from_url(self):
         self.log.info("url: fetching metadata of url %s " % self.url)
         ydl_opts = {
-            'noplaylist': True
+            'noplaylist': True,
+            'proxy': '',
         }
 
         cookie = var.config.get('youtube_dl', 'cookie_file')
@@ -199,6 +200,7 @@ class URLItem(BaseItem):
                     'format': 'bestaudio/best',
                     'outtmpl': base_path,
                     'noplaylist': True,
+                    'proxy': '',
                     'writethumbnail': True,
                     'updatetime': False,
                     'verbose': var.config.getboolean('debug', 'youtube_dl'),
