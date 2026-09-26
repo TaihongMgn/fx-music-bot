@@ -33,6 +33,10 @@ export default class {
       document.getElementById('pagestyle')
           .setAttribute('href', 'static/css/' + (dark ? 'dark' : 'main') + '.css' + query);
 
+      // Keep the browser chrome and status bar in step with the theme.
+      const themeColor = document.querySelector('meta[name="theme-color"]');
+      if (themeColor) themeColor.setAttribute('content', dark ? '#000000' : '#f2f2f7');
+
       // Update local storage
       localStorage.setItem('darkTheme', dark);
 

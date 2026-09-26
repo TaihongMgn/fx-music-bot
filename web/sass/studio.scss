@@ -834,6 +834,7 @@ input[type="radio"] {
 }
 
 #playerBar {
+    height: 100%;
     background-color: var(--tint) !important;
 }
 
@@ -1143,6 +1144,11 @@ input[type="radio"] {
         padding-left: max(12px, env(safe-area-inset-left));
     }
 
+    body.is-typing .tabbar,
+    body.is-typing #playerToast {
+        display: none;
+    }
+
     #playerToast {
         bottom: calc(64px + env(safe-area-inset-bottom));
         width: calc(100% - 16px);
@@ -1193,11 +1199,11 @@ input[type="radio"] {
     }
 
     #playerBarBox {
-        display: block;
+        display: flex;
         grid-area: bar;
         width: 100%;
         min-width: 0;
-        height: 4px;
+        height: 6px;
     }
 
     #playerTime {

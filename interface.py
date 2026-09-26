@@ -372,6 +372,15 @@ def register():
     return _render_login_page(register_form=True)
 
 
+@web.route("/sw.js", methods=['GET'])
+def service_worker():
+    # Served from the site root so the worker scope covers the whole panel.
+    response = send_file(os.path.join(root_dir, "static", "sw.js"), mimetype='application/javascript')
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
+
+
 @web.route("/", methods=['GET'])
 @requires_auth
 def index():

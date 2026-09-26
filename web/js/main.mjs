@@ -2347,6 +2347,26 @@ window.addEventListener('scroll', () => {
 // Default to the playlist view.
 switchView('view-playlist');
 
+// Phones: lift the fixed bars out of the way while the keyboard is up.
+const phoneQuery = window.matchMedia('(max-width: 767.98px)');
+document.addEventListener('focusin', (event) => {
+  if (phoneQuery.matches && event.target.matches('input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), textarea, select')) {
+    document.body.classList.add('is-typing');
+  }
+});
+document.addEventListener('focusout', () => {
+  document.body.classList.remove('is-typing');
+});
+
+// Home-screen install: cache the shell so the panel opens instantly.
+if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch((error) => {
+      console.warn('Service worker registration failed', error);
+    });
+  });
+}
+
 // -----------------------
 // ----- Application -----
 // -----------------------
