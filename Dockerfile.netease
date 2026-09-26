@@ -41,11 +41,11 @@ EXPOSE 8181 3000
 WORKDIR /botamusique
 RUN apt-get update \
     && apt-get install --no-install-recommends -y opus-tools ffmpeg libmagic-dev curl tar zlib1g \
-       curl gnupg ca-certificates supervisor \
-    && curl -fsSL https://deb.nodesource.com/setup_16.x | bash - \
-    && apt-get install -y nodejs \
+       ca-certificates supervisor libstdc++6 \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /var/log/supervisor /etc/supervisor/conf.d
+# NodeSource no longer ships Node 16. Reuse the binary from the API build stage.
+COPY --from=netease-api-builder /usr/local/bin/node /usr/local/bin/node
 COPY --from=python-builder /botamusique .
 COPY --from=template-builder /botamusique/static static
 COPY --from=template-builder /botamusique/web/templates web/templates

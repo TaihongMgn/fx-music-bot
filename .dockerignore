@@ -1,1 +1,10 @@
-.git/
+.git
+.local
+.venv
+**/node_modules
+**/__pycache__
+**/*.pyc
+**/.pytest_cache
+*.db
+.cursor
+terminals
