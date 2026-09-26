@@ -1,14 +1,14 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta charset="UTF-8">
     <title>{{ tr('login_title') }}</title>
     <link rel="icon" href="static/image/favicon.ico">
-    <link id="pagestyle" rel="stylesheet" href="static/css/dark.css?v=20260926p">
+    <link id="pagestyle" rel="stylesheet" href="static/css/dark.css?v=20260926q">
     <script>
         if (localStorage.getItem('darkTheme') === 'false') {
-            document.getElementById('pagestyle').href = 'static/css/main.css?v=20260926p';
+            document.getElementById('pagestyle').href = 'static/css/main.css?v=20260926q';
         }
     </script>
     <style>
@@ -27,7 +27,7 @@
         .auth-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-top: 18px; }
         .auth-actions a { color: var(--tint); font-weight: 600; }
         @media (max-width: 480px) {
-            body { padding: 16px 12px; }
+            body { padding: max(16px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
             .auth-card-body { padding: 22px 16px; }
             .auth-actions { align-items: stretch; flex-direction: column; }
             .auth-actions .btn { width: 100%; }

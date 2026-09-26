@@ -1867,7 +1867,7 @@ function bindNeteaseTrackDragSelect(list, syncSelectAll) {
   };
 
   list.addEventListener('pointerdown', (event) => {
-    if (event.button !== 0) return;
+    if (event.pointerType === 'touch' || event.button !== 0) return;
     const row = event.target.closest('.netease-playlist-track');
     if (!row || !list.contains(row)) return;
     const box = row.querySelector('.netease-playlist-check');
@@ -1911,6 +1911,16 @@ function bindNeteaseTrackDragSelect(list, syncSelectAll) {
   };
   list.addEventListener('pointerup', endDrag);
   list.addEventListener('pointercancel', endDrag);
+
+  list.addEventListener('click', (event) => {
+    if (event.pointerType === 'mouse') return;
+    const row = event.target.closest('.netease-playlist-track');
+    if (!row || !list.contains(row) || event.target.closest('input, button, a')) return;
+    const box = row.querySelector('.netease-playlist-check');
+    if (!box) return;
+    box.checked = !box.checked;
+    box.dispatchEvent(new Event('change', { bubbles: true }));
+  });
 }
 
 function renderNeteasePlaylist(playlist) {
