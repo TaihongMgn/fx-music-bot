@@ -184,7 +184,15 @@ async function consturctServer(moduleDefs) {
   /**
    * Cache
    */
-  app.use(cache('2 minutes', (_, res) => res.statusCode === 200))
+  app.use(
+    cache('2 minutes', (req, res) => {
+      if (res.statusCode !== 200) return false
+      // QR login status changes after each scan. A cached 801 hides that.
+      const url = req.originalUrl || ''
+      if (url.startsWith('/login/qr/')) return false
+      return true
+    }),
+  )
 
   /**
    * Special Routers
@@ -293,21 +301,18 @@ async function serveNcmApi(options) {
   const port = Number(options.port || process.env.PORT || '3000')
   const host = options.host || process.env.HOST || ''
 
-  const checkVersionSubmission =
-    options.checkVersion &&
-    checkVersion().then(({ npmVersion, ourVersion, status }) => {
-      if (status == VERSION_CHECK_RESULT.NOT_LATEST) {
-        console.log(
-          `最新版本: ${npmVersion}, 当前版本: ${ourVersion}, 请及时更新`,
-        )
-      }
-    })
-  const constructServerSubmission = consturctServer(options.moduleDefs)
-
-  const [_, app] = await Promise.all([
-    checkVersionSubmission,
-    constructServerSubmission,
-  ])
+  if (options.checkVersion) {
+    checkVersion()
+      .then(({ npmVersion, ourVersion, status }) => {
+        if (status == VERSION_CHECK_RESULT.NOT_LATEST) {
+          console.log(
+            `最新版本: ${npmVersion}, 当前版本: ${ourVersion}, 请及时更新`,
+          )
+        }
+      })
+      .catch(() => {})
+  }
+  const app = await consturctServer(options.moduleDefs)
 
   /** @type {import('express').Express & ExpressExtension} */
   const appExt = app

@@ -375,7 +375,7 @@ def register():
 @web.route("/", methods=['GET'])
 @requires_auth
 def index():
-    html = open(os.path.join(root_dir, f"web/templates/index.{var.language}.html"), "r").read()
+    html = open(os.path.join(root_dir, f"web/templates/index.{var.language}.html"), "r", encoding="utf-8").read()
     response = Response(html, mimetype='text/html; charset=utf-8')
     response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, max-age=0'
     response.headers['Pragma'] = 'no-cache'
@@ -1018,6 +1018,24 @@ def _add_netease_tracks(client, cookie, tracks, playlist_user):
     return added, skipped
 
 
+def _parse_netease_song_list(raw):
+    if isinstance(raw, str):
+        raw = json.loads(raw)
+    if not isinstance(raw, list):
+        return []
+    tracks = []
+    for song in raw:
+        if not isinstance(song, dict) or song.get('id') in (None, ''):
+            continue
+        tracks.append({
+            'id': song.get('id'),
+            'name': str(song.get('name') or ''),
+            'artist': str(song.get('artist') or ''),
+            'duration': song.get('duration'),
+        })
+    return tracks
+
+
 @web.route("/api/netease/playlist", methods=['GET'])
 @requires_auth
 def netease_playlist():
@@ -1294,6 +1312,21 @@ def post():
             }
             var.db.set('netease_playlists', playlist_id, json.dumps(saved_playlist, ensure_ascii=False))
             return jsonify({'ok': True})
+
+        elif 'add_netease_songs' in payload:
+            try:
+                tracks = _parse_netease_song_list(payload['add_netease_songs'])
+            except (TypeError, ValueError):
+                abort(400)
+            if not tracks:
+                abort(400)
+            try:
+                client, cookie = _get_netease_client_and_cookie()
+                added, skipped = _add_netease_tracks(client, cookie, tracks, user)
+            except (requests.RequestException, ValueError, TypeError):
+                log.exception("web: Netease selected songs failed")
+                return jsonify({'error': tr_web('netease_playlist_error')}), 502
+            return jsonify({'added': added, 'skipped': skipped})
 
         elif 'play_netease_playlist' in payload or 'play_netease_playlist_url' in payload:
             playlist_id = payload.get('play_netease_playlist') or payload.get('play_netease_playlist_url')

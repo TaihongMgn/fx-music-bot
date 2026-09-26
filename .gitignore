@@ -106,6 +106,8 @@ venv.bak/
 .mypy_cache/
 
 configuration.ini
+.local/
+.venv/
 .vscode/settings.json
 2019-07-27 22_09_08-radiobrowser.py - botamusique - Visual Studio Code.png
 .DS_Store

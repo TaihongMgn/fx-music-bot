@@ -4,6 +4,7 @@
 import base64
 import logging
 import os
+import time
 
 import requests
 
@@ -15,11 +16,15 @@ class NeteaseClient:
     def __init__(self, api_base_url):
         self.api_base_url = (api_base_url or "").rstrip("/")
         self.timeout = 10
+        # The API is on localhost. System proxy (for example 127.0.0.1:7897)
+        # must not intercept it, or QR login fails while the page stays blank.
+        self.session = requests.Session()
+        self.session.trust_env = False
 
     def _get(self, endpoint, params=None):
         if not self.api_base_url:
             raise ValueError("Netease API URL is empty")
-        response = requests.get(
+        response = self.session.get(
             self.api_base_url + endpoint,
             params=params or {},
             timeout=self.timeout,
@@ -149,13 +154,13 @@ class NeteaseClient:
         return self._song(songs[0]) if songs else None
 
     def qr_login_start(self):
-        key_payload = self._get("/login/qr/key")
+        key_payload = self._get("/login/qr/key", self._fresh_params())
         key = (key_payload.get("data") or {}).get("unikey")
         if not key:
             raise ValueError("Netease QR key is missing")
         qr_payload = self._get(
             "/login/qr/create",
-            {"key": key, "qrimg": "true"},
+            self._fresh_params({"key": key, "qrimg": "true"}),
         )
         qrimg = (qr_payload.get("data") or {}).get("qrimg")
         if not qrimg:
@@ -164,9 +169,20 @@ class NeteaseClient:
             qrimg = qrimg.split(",", 1)[1]
         return key, qrimg
 
+    @staticmethod
+    def _fresh_params(params=None):
+        # NeteaseCloudMusicApi caches identical GET URLs for 2 minutes.
+        # QR status must be read live, or a scan never updates the page.
+        merged = dict(params or {})
+        merged["timestamp"] = int(time.time() * 1000)
+        return merged
+
     def qr_login_check(self, key):
-        payload = self._get("/login/qr/check", {"key": key})
-        return payload.get("code"), payload.get("cookie")
+        payload = self._get("/login/qr/check", self._fresh_params({"key": key}))
+        cookie = payload.get("cookie")
+        if isinstance(cookie, list):
+            cookie = ";".join(str(item) for item in cookie if item)
+        return payload.get("code"), cookie or None
 
 
 class NeteaseCookieManager:

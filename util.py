@@ -30,13 +30,13 @@ def solve_filepath(path):
     if not path:
         return ''
 
-    if path[0] == '/':
+    if os.path.isabs(path):
         return path
     elif os.path.exists(path):
         return path
     else:
         mydir = os.path.dirname(os.path.realpath(__file__))
-        return mydir + '/' + path
+        return os.path.join(mydir, path)
 
 
 def get_recursive_file_list_sorted(path):

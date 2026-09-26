@@ -1562,7 +1562,17 @@ async function startNeteaseQrLogin() {
     }, 300000);
   } catch (error) {
     console.error('Netease QR login start failed', error);
-    setNeteaseQrStatus(error.message || neteaseAccountLabel('qrExpiredLabel'));
+    const message = error.message || neteaseAccountLabel('qrExpiredLabel');
+    setNeteaseQrStatus(message);
+    if (neteaseAccountBody) {
+      let note = neteaseAccountBody.querySelector('.netease-login-error');
+      if (!note) {
+        note = document.createElement('div');
+        note.className = 'text-danger mt-2 netease-login-error';
+        neteaseAccountBody.appendChild(note);
+      }
+      note.textContent = message;
+    }
   }
 }
 
@@ -1784,15 +1794,141 @@ function neteasePlaylistLabel(name) {
   return escapeNeteaseHtml(neteasePlaylistCard.dataset[name] || '');
 }
 
+function neteaseSongsFromChecks(boxes) {
+  return Array.from(boxes).map((box) => ({
+    id: box.dataset.id,
+    name: box.dataset.name,
+    artist: box.dataset.artist,
+    duration: Number(box.dataset.duration) || 0,
+  }));
+}
+
+function showNeteasePlaylistAlert(kind, message) {
+  neteasePlaylistResult.insertAdjacentHTML('afterbegin',
+    `<div class="alert alert-${kind}">${message}</div>`);
+}
+
+function addNeteasePlaylistSongs(songs) {
+  if (!songs.length) {
+    showNeteasePlaylistAlert('warning', neteasePlaylistLabel('noneSelectedLabel'));
+    return;
+  }
+  request('post', {add_netease_songs: JSON.stringify(songs)}).done((data) => {
+    refreshPlaylistAfterNeteasePlayback();
+    loadNeteaseAccount();
+    const added = data.added || 0;
+    const skipped = data.skipped || 0;
+    if (!added) {
+      showNeteasePlaylistAlert('warning', neteasePlaylistLabel('noneAddedLabel'));
+      return;
+    }
+    const message = skipped
+      ? neteasePlaylistLabel('addedDetailLabel').replace('{count}', added).replace('{skipped}', skipped)
+      : neteasePlaylistLabel('addedLabel').replace('{count}', added);
+    showNeteasePlaylistAlert('info', message);
+  }).fail(() => {
+    showNeteasePlaylistAlert('danger', neteasePlaylistLabel('errorLabel'));
+  });
+}
+
+function bindNeteaseTrackDragSelect(list, syncSelectAll) {
+  let drag = null;
+  let scrollTimer = null;
+
+  const rowsOf = () => Array.from(list.querySelectorAll('.netease-playlist-track'));
+
+  const applyRange = (index) => {
+    const start = Math.min(drag.anchor, index);
+    const end = Math.max(drag.anchor, index);
+    drag.rows.forEach((row, i) => {
+      const box = row.querySelector('.netease-playlist-check');
+      if (!box) return;
+      box.checked = i >= start && i <= end ? drag.paint : drag.original[i];
+    });
+    syncSelectAll();
+  };
+
+  const rowAt = (x, y) => {
+    const hit = document.elementFromPoint(x, y);
+    const row = hit && hit.closest('.netease-playlist-track');
+    if (!row || !list.contains(row)) return -1;
+    return drag.rows.indexOf(row);
+  };
+
+  const tickScroll = () => {
+    if (!drag || !drag.scrollDir) {
+      scrollTimer = null;
+      return;
+    }
+    list.scrollTop += drag.scrollDir * 16;
+    const index = rowAt(drag.x, drag.y);
+    if (index >= 0) applyRange(index);
+    scrollTimer = requestAnimationFrame(tickScroll);
+  };
+
+  list.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    const row = event.target.closest('.netease-playlist-track');
+    if (!row || !list.contains(row)) return;
+    const box = row.querySelector('.netease-playlist-check');
+    if (!box) return;
+    event.preventDefault();
+    const rows = rowsOf();
+    drag = {
+      pointerId: event.pointerId,
+      anchor: rows.indexOf(row),
+      paint: !box.checked,
+      original: rows.map((item) => {
+        const input = item.querySelector('.netease-playlist-check');
+        return input ? input.checked : false;
+      }),
+      rows,
+      x: event.clientX,
+      y: event.clientY,
+      scrollDir: 0,
+    };
+    applyRange(drag.anchor);
+    list.setPointerCapture(event.pointerId);
+  });
+
+  list.addEventListener('pointermove', (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    drag.x = event.clientX;
+    drag.y = event.clientY;
+    const rect = list.getBoundingClientRect();
+    const edge = 28;
+    if (event.clientY < rect.top + edge) drag.scrollDir = -1;
+    else if (event.clientY > rect.bottom - edge) drag.scrollDir = 1;
+    else drag.scrollDir = 0;
+    const index = rowAt(event.clientX, event.clientY);
+    if (index >= 0) applyRange(index);
+    if (drag.scrollDir && !scrollTimer) scrollTimer = requestAnimationFrame(tickScroll);
+  });
+
+  const endDrag = (event) => {
+    if (!drag || event.pointerId !== drag.pointerId) return;
+    drag = null;
+  };
+  list.addEventListener('pointerup', endDrag);
+  list.addEventListener('pointercancel', endDrag);
+}
+
 function renderNeteasePlaylist(playlist) {
   const songs = playlist.songs || [];
   const cover = playlist.cover ?
     `<img src="${escapeNeteaseHtml(playlist.cover)}" width="64" height="64" class="mr-2" alt="">` : '';
   const songItems = songs.map((song) => {
     const feeLabel = song.fee === 0 ? neteaseCard.dataset.freeLabel : neteaseCard.dataset.vipLabel;
-    return `<li class="mb-1">${escapeNeteaseHtml(song.name)} - ${escapeNeteaseHtml(song.artist)}
-      <small class="text-muted">(${escapeNeteaseHtml(feeLabel)})</small>
-    </li>`;
+    return `<div class="mb-1 d-flex align-items-center netease-playlist-track" style="cursor: pointer;">
+      <input type="checkbox" class="netease-playlist-check mr-2"
+        data-id="${escapeNeteaseHtml(song.id)}"
+        data-name="${escapeNeteaseHtml(song.name)}"
+        data-artist="${escapeNeteaseHtml(song.artist)}"
+        data-duration="${escapeNeteaseHtml(song.duration)}">
+      <span class="flex-grow-1">${escapeNeteaseHtml(song.name)} - ${escapeNeteaseHtml(song.artist)}
+        <small class="text-muted">(${escapeNeteaseHtml(feeLabel)})</small>
+      </span>
+    </div>`;
   }).join('');
   neteasePlaylistResult.innerHTML = `
     <div class="d-flex align-items-center mb-2">
@@ -1801,21 +1937,39 @@ function renderNeteasePlaylist(playlist) {
         <div class="text-muted">${neteasePlaylistLabel('songCountLabel').replace('{count}', songs.length)}</div>
       </div>
     </div>
-    <div class="btn-group mb-2">
-      <button type="button" class="btn btn-sm btn-primary netease-playlist-play-all-btn">${neteasePlaylistLabel('playAllLabel')}</button>
-      <button type="button" class="btn btn-sm btn-secondary netease-playlist-save-btn">${neteasePlaylistLabel('saveLabel')}</button>
+    <div class="mb-2">
+      <button type="button" class="btn btn-sm btn-primary netease-playlist-add-selected-btn">${neteasePlaylistLabel('addSelectedLabel')}</button>
+      <button type="button" class="btn btn-sm btn-outline-secondary ml-2 netease-playlist-add-all-btn">${neteasePlaylistLabel('addAllLabel')}</button>
+      <button type="button" class="btn btn-sm btn-secondary ml-2 netease-playlist-save-btn">${neteasePlaylistLabel('saveLabel')}</button>
+      <label class="ml-3 mb-0">
+        <input type="checkbox" class="netease-playlist-select-all mr-1">
+        ${neteasePlaylistLabel('selectAllLabel')}
+      </label>
     </div>
-    <ol class="pl-4">${songItems}</ol>
+    <div class="netease-playlist-tracks" style="max-height: 400px; overflow-y: auto; border: 1px solid #444; padding: 8px; border-radius: 4px; user-select: none; touch-action: none;">${songItems}</div>
   `;
-  neteasePlaylistResult.querySelector('.netease-playlist-play-all-btn').addEventListener('click', () => {
-    request('post', {play_netease_playlist_url: playlist.id}).done((data) => {
-      refreshPlaylistAfterNeteasePlayback();
-      loadNeteaseAccount();
-      if (data.added !== undefined) {
-        neteasePlaylistResult.insertAdjacentHTML('afterbegin',
-          `<div class="alert alert-info">${neteasePlaylistLabel('addedLabel').replace('{count}', data.added)}</div>`);
-      }
+  const trackList = neteasePlaylistResult.querySelector('.netease-playlist-tracks');
+  const trackChecks = () => neteasePlaylistResult.querySelectorAll('.netease-playlist-check');
+  const selectAll = neteasePlaylistResult.querySelector('.netease-playlist-select-all');
+  const syncSelectAll = () => {
+    const boxes = trackChecks();
+    selectAll.checked = boxes.length > 0 && Array.from(boxes).every((item) => item.checked);
+  };
+  selectAll.addEventListener('change', () => {
+    trackChecks().forEach((box) => {
+      box.checked = selectAll.checked;
     });
+  });
+  trackChecks().forEach((box) => {
+    box.addEventListener('change', syncSelectAll);
+  });
+  bindNeteaseTrackDragSelect(trackList, syncSelectAll);
+  neteasePlaylistResult.querySelector('.netease-playlist-add-selected-btn').addEventListener('click', () => {
+    addNeteasePlaylistSongs(neteaseSongsFromChecks(
+      neteasePlaylistResult.querySelectorAll('.netease-playlist-check:checked')));
+  });
+  neteasePlaylistResult.querySelector('.netease-playlist-add-all-btn').addEventListener('click', () => {
+    addNeteasePlaylistSongs(neteaseSongsFromChecks(trackChecks()));
   });
   neteasePlaylistResult.querySelector('.netease-playlist-save-btn').addEventListener('click', () => {
     const savedData = {
@@ -1853,20 +2007,13 @@ async function loadNeteaseSavedPlaylists() {
         <div class="flex-grow-1">${escapeNeteaseHtml(playlist.name)}
           <small class="text-muted">(${escapeNeteaseHtml(playlist.count)})</small>
         </div>
-        <button type="button" class="btn btn-sm btn-primary mr-1 netease-saved-play-btn" data-id="${escapeNeteaseHtml(playlist.id)}">${neteasePlaylistLabel('playLabel')}</button>
+        <button type="button" class="btn btn-sm btn-primary mr-1 netease-saved-choose-btn" data-id="${escapeNeteaseHtml(playlist.id)}">${neteasePlaylistLabel('chooseLabel')}</button>
         <button type="button" class="btn btn-sm btn-outline-danger netease-saved-delete-btn" data-id="${escapeNeteaseHtml(playlist.id)}">${neteasePlaylistLabel('deleteLabel')}</button>
       </div>
     `).join('');
-    neteaseSavedPlaylists.querySelectorAll('.netease-saved-play-btn').forEach((button) => {
+    neteaseSavedPlaylists.querySelectorAll('.netease-saved-choose-btn').forEach((button) => {
       button.addEventListener('click', () => {
-        request('post', {play_netease_playlist: button.dataset.id}).done((result) => {
-          refreshPlaylistAfterNeteasePlayback();
-          loadNeteaseAccount();
-          if (result.added !== undefined) {
-            neteaseSavedPlaylists.insertAdjacentHTML('afterbegin',
-              `<div class="alert alert-info">${neteasePlaylistLabel('addedLabel').replace('{count}', result.added)}</div>`);
-          }
-        });
+        loadNeteasePlaylist(button.dataset.id);
       });
     });
     neteaseSavedPlaylists.querySelectorAll('.netease-saved-delete-btn').forEach((button) => {
@@ -1884,24 +2031,35 @@ async function loadNeteaseSavedPlaylists() {
   }
 }
 
-if (neteasePlaylistFetchBtn) {
-  neteasePlaylistFetchBtn.addEventListener('click', async () => {
-    const value = neteasePlaylistInput.value.trim();
-    if (!value) return;
-    try {
-      const response = await fetch(`/api/netease/playlist?url=${encodeURIComponent(value)}`);
-      const data = await response.json();
-      if (!response.ok || !data.id) {
-        neteasePlaylistResult.textContent = data.error || neteasePlaylistLabel('noResultLabel');
-        return;
-      }
-      renderNeteasePlaylist(data);
-      loadNeteaseAccount();
-    } catch (error) {
-      console.error('Netease playlist loading failed', error);
-      neteasePlaylistResult.textContent = neteasePlaylistLabel('errorLabel');
+async function loadNeteasePlaylist(value) {
+  if (!value) return;
+  neteasePlaylistResult.innerHTML = `<div class="text-muted">${neteasePlaylistLabel('loadingLabel')}</div>`;
+  try {
+    const response = await fetch(`/api/netease/playlist?url=${encodeURIComponent(value)}`);
+    const data = await response.json();
+    if (!response.ok || !data.id) {
+      neteasePlaylistResult.textContent = data.error || neteasePlaylistLabel('noResultLabel');
+      return;
     }
+    renderNeteasePlaylist(data);
+    neteasePlaylistResult.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+  } catch (error) {
+    console.error('Netease playlist loading failed', error);
+    neteasePlaylistResult.textContent = neteasePlaylistLabel('errorLabel');
+  }
+}
+
+if (neteasePlaylistFetchBtn) {
+  neteasePlaylistFetchBtn.addEventListener('click', () => {
+    loadNeteasePlaylist(neteasePlaylistInput.value.trim());
   });
+  if (neteasePlaylistInput) {
+    neteasePlaylistInput.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter') {
+        loadNeteasePlaylist(neteasePlaylistInput.value.trim());
+      }
+    });
+  }
   loadNeteaseSavedPlaylists();
 }
 

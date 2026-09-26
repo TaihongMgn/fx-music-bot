@@ -10,9 +10,9 @@ lang_dict = {}
 def load_lang(lang):
     global lang_dict, default_lang_dict
     root_dir = os.path.dirname(__file__)
-    with open(os.path.join(root_dir, "lang/en_US.json"), "r") as f:
+    with open(os.path.join(root_dir, "lang/en_US.json"), "r", encoding="utf-8") as f:
         default_lang_dict = json.load(f)
-    with open(os.path.join(root_dir, f"lang/{lang}.json"), "r") as f:
+    with open(os.path.join(root_dir, f"lang/{lang}.json"), "r", encoding="utf-8") as f:
         lang_dict = json.load(f)
 
 
