@@ -1,4 +1,4 @@
-FROM python:3.11-slim-bullseye AS python-builder
+FROM python:3.11-slim-bookworm AS python-builder
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /botamusique
 RUN apt-get update \
@@ -10,15 +10,16 @@ RUN python3 -m venv venv \
     && venv/bin/pip install -r requirements.txt
 
 
-FROM node:16-bullseye-slim AS node-builder
+FROM node:20-bookworm-slim AS node-builder
 ENV DEBIAN_FRONTEND=noninteractive
+ENV NODE_OPTIONS=--openssl-legacy-provider
 WORKDIR /botamusique/web
 COPY web /botamusique/web
 RUN npm install
 RUN npm run build
 
 
-FROM python:3.11-slim-bullseye AS template-builder
+FROM python:3.11-slim-bookworm AS template-builder
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /botamusique
 COPY --from=python-builder /botamusique .
@@ -27,7 +28,7 @@ COPY --from=node-builder /botamusique/static static
 RUN venv/bin/python scripts/translate_templates.py --lang-dir /botamusique/lang --template-dir /botamusique/web/templates
 
 
-FROM node:16-bullseye-slim AS netease-api-builder
+FROM node:20-bookworm-slim AS netease-api-builder
 ENV DEBIAN_FRONTEND=noninteractive
 WORKDIR /netease-api
 COPY netease-api /netease-api
@@ -35,7 +36,7 @@ RUN npm install --production --ignore-scripts \
     && rm -rf /root/.npm /tmp/*
 
 
-FROM python:3.11-slim-bullseye
+FROM python:3.11-slim-bookworm
 ENV DEBIAN_FRONTEND=noninteractive
 EXPOSE 8181 3000
 WORKDIR /botamusique
@@ -44,7 +45,7 @@ RUN apt-get update \
        ca-certificates supervisor libstdc++6 \
     && rm -rf /var/lib/apt/lists/* \
     && mkdir -p /var/log/supervisor /etc/supervisor/conf.d
-# NodeSource no longer ships Node 16. Reuse the binary from the API build stage.
+# Debian 11 and NodeSource Node 16 are both gone. Reuse the Node 20 binary from the API stage.
 COPY --from=netease-api-builder /usr/local/bin/node /usr/local/bin/node
 COPY --from=python-builder /botamusique .
 COPY --from=template-builder /botamusique/static static
