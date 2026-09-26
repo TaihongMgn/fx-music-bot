@@ -292,6 +292,8 @@ class XimalayaItem(BaseItem):
         self.ready = 'preparing'
         partial_path = self.path + '.part'
         response = None
+        session = requests.Session()
+        session.trust_env = False
 
         try:
             with util.tmp_folder_quota(
@@ -301,7 +303,7 @@ class XimalayaItem(BaseItem):
                 self.log.info(
                     "ximalaya: downloading %s - %s", self.title, self.artist)
                 try:
-                    response = requests.get(
+                    response = session.get(
                         self.url,
                         stream=True,
                         timeout=30,
@@ -323,7 +325,7 @@ class XimalayaItem(BaseItem):
                         raise
                     if not self.url:
                         raise
-                    response = requests.get(
+                    response = session.get(
                         self.url,
                         stream=True,
                         timeout=30,
@@ -367,6 +369,7 @@ class XimalayaItem(BaseItem):
         finally:
             if response is not None:
                 response.close()
+            session.close()
             self.downloading = False
 
         return True

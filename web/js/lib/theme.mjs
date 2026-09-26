@@ -12,8 +12,8 @@ export default class {
       // Respect an explicit user choice; otherwise use the stylesheet selected by the template.
       const storedTheme = localStorage.getItem('darkTheme');
       if (storedTheme === null) {
-        const stylesheet = document.getElementById('pagestyle').getAttribute('href');
-        this.set(stylesheet.endsWith('/dark.css'));
+        const stylesheet = document.getElementById('pagestyle').getAttribute('href') || '';
+        this.set(/\/dark\.css(?:\?|$)/.test(stylesheet));
       } else {
         this.set(storedTheme === 'true');
       }

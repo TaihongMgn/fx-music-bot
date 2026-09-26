@@ -167,6 +167,10 @@ class NeteaseItem(BaseItem):
         self.ready = 'preparing'
         partial_path = self.path + '.part'
         response = None
+        # Ignore the system proxy. It is often a local port that is closed,
+        # and music.126.net is reachable directly.
+        session = requests.Session()
+        session.trust_env = False
 
         try:
             with util.tmp_folder_quota(
@@ -175,7 +179,7 @@ class NeteaseItem(BaseItem):
                     protected_paths=(self.path, partial_path)) as quota:
                 self.log.info(
                     "netease: downloading %s - %s", self.title, self.artist)
-                response = requests.get(
+                response = session.get(
                     self.url,
                     stream=True,
                     timeout=30,
@@ -219,6 +223,7 @@ class NeteaseItem(BaseItem):
         finally:
             if response is not None:
                 response.close()
+            session.close()
             self.downloading = False
 
         return True

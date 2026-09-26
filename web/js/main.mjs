@@ -1682,7 +1682,7 @@ async function loadSessionUser() {
     const response = await fetch('/api/session_user');
     const data = await response.json();
     if (!response.ok) throw new Error('session user failed');
-    el.textContent = data.user ? '👤 ' + data.user : '';
+    el.textContent = data.user || '';
     if (data.is_admin) {
       const navLink = document.getElementById('nav-accounts-link');
       if (navLink) navLink.classList.remove('d-none');
@@ -1946,7 +1946,7 @@ function renderNeteasePlaylist(playlist) {
         ${neteasePlaylistLabel('selectAllLabel')}
       </label>
     </div>
-    <div class="netease-playlist-tracks" style="max-height: 400px; overflow-y: auto; border: 1px solid #444; padding: 8px; border-radius: 4px; user-select: none; touch-action: none;">${songItems}</div>
+    <div class="netease-playlist-tracks">${songItems}</div>
   `;
   const trackList = neteasePlaylistResult.querySelector('.netease-playlist-tracks');
   const trackChecks = () => neteasePlaylistResult.querySelectorAll('.netease-playlist-check');
@@ -2079,6 +2079,7 @@ const playerTitle = document.getElementById('playerTitle');
 const playerArtist = document.getElementById('playerArtist');
 const playerBar = document.getElementById('playerBar');
 const playerBarBox = document.getElementById('playerBarBox');
+const playerTime = document.getElementById('playerTime');
 const playerPlayBtn = document.getElementById('playerPlayBtn');
 const playerPauseBtn = document.getElementById('playerPauseBtn');
 const playerSkipBtn = document.getElementById('playerSkipBtn');
@@ -2107,6 +2108,7 @@ function playerSetIdle() {
   playerTitle.textContent = '-- IDLE --';
   playerArtist.textContent = '';
   setProgressBar(playerBar, 0);
+  if (playerTime) playerTime.textContent = '';
   clearInterval(playhead_timer);
 }
 
@@ -2168,11 +2170,11 @@ function updatePlayerPlayhead(playhead) {
     playerBar.classList.remove('progress-bar-animated');
     clearInterval(playhead_timer);
     player_playhead_position = playhead;
-    setProgressBar(playerBar, player_playhead_position / currentPlayingItem.duration, secondsToStr(player_playhead_position));
+    setPlayerPlayhead(player_playhead_position);
     if (playing) {
       playhead_timer = setInterval(function() {
         player_playhead_position += 0.3;
-        setProgressBar(playerBar, player_playhead_position / currentPlayingItem.duration, secondsToStr(player_playhead_position));
+        setPlayerPlayhead(player_playhead_position);
       }, 300); // delay in milliseconds
     }
   } else {
@@ -2202,9 +2204,18 @@ playerBarBox.addEventListener('mouseup', function(event) {
   playhead_dragging = false;
 });
 
+function setPlayerPlayhead(position) {
+  const duration = currentPlayingItem ? currentPlayingItem.duration : 0;
+  setProgressBar(playerBar, duration ? position / duration : 0);
+  if (playerTime) playerTime.textContent = secondsToStr(position);
+}
+
 function playheadDragged(event) {
   const percent = (event.clientX - playerBarBox.getBoundingClientRect().x) / playerBarBox.clientWidth;
-  setProgressBar(playerBar, percent, secondsToStr(percent * currentPlayingItem.duration));
+  setProgressBar(playerBar, percent);
+  if (playerTime && currentPlayingItem) {
+    playerTime.textContent = secondsToStr(percent * currentPlayingItem.duration);
+  }
 }
 
 
@@ -2213,30 +2224,98 @@ function playheadDragged(event) {
 // ----- View navigation -----
 // -----------------------
 
-const navLinks = document.querySelectorAll('.sidebar .nav-link');
+const navLinks = document.querySelectorAll('a.nav-link[data-view]');
 const appViews = document.querySelectorAll('.app-view');
+const addViews = { 'view-netease': true, 'view-ximalaya': true };
 
-function switchView(viewId, activeLink = null) {
+function setPane(pane) {
+  const segment = document.getElementById('add-segment');
+  if (pane) {
+    document.body.dataset.pane = pane;
+  } else {
+    delete document.body.dataset.pane;
+  }
+  if (segment) {
+    segment.hidden = !pane;
+    segment.querySelectorAll('[data-pane]').forEach((button) => {
+      button.classList.toggle('is-on', button.dataset.pane === pane);
+    });
+  }
+}
+
+function switchView(viewId, activeLink = null, pane = null) {
   appViews.forEach((view) => view.classList.remove('active'));
   const view = document.getElementById(viewId);
-  if (!view) {
-    return;
-  }
+  if (!view) return;
   view.classList.add('active');
-  navLinks.forEach((link) => link.classList.toggle('active', activeLink ? link === activeLink : link.dataset.view === viewId));
-  // 鍒囨崲瑙嗗浘鍚庢粴鍥為《閮紝閬垮厤鍋滅暀鍦ㄦ棫瑙嗗浘鐨勬粴鍔ㄤ綅缃?
+
+  const link = activeLink || document.querySelector('a.nav-link[data-view="' + viewId + '"]');
+  const onAdd = !!addViews[viewId];
+  navLinks.forEach((item) => {
+    const inTab = !!item.closest('.tabbar');
+    if (!inTab) {
+      item.classList.toggle('active', item === link);
+      return;
+    }
+    const itemAdd = !!addViews[item.dataset.view] || !!item.dataset.pane;
+    item.classList.toggle('active', viewId !== 'view-accounts' && (onAdd ? itemAdd : item.dataset.view === viewId));
+  });
+
+  const title = document.getElementById('view-kicker');
+  const chromeTitle = document.getElementById('chrome-title');
+  let label = '';
+  if (onAdd) {
+    const addTab = document.querySelector('.tabbar [data-pane] span');
+    label = addTab ? addTab.textContent.trim() : '';
+  } else if (link && link.querySelector('span')) {
+    label = link.querySelector('span').textContent.trim();
+  }
+  if (title) title.textContent = label;
+  if (chromeTitle) chromeTitle.textContent = label;
+
+  const back = document.getElementById('stage-back');
+  if (back) back.hidden = viewId !== 'view-accounts';
+  if (viewId === 'view-accounts') {
+    document.body.dataset.screen = 'accounts';
+    setPane(null);
+  } else if (onAdd) {
+    delete document.body.dataset.screen;
+    const nextPane = pane || (viewId === 'view-ximalaya' ? 'xima' : (document.body.dataset.pane === 'links' ? 'links' : 'songs'));
+    setPane(nextPane);
+  } else {
+    delete document.body.dataset.screen;
+    setPane(null);
+  }
+
   window.scrollTo(0, 0);
-  document.querySelector('.main-content').scrollTop = 0;
+  const main = document.querySelector('.main-content');
+  if (main) main.scrollTop = 0;
 }
 
 navLinks.forEach((link) => link.addEventListener('click', (event) => {
-  if (!link.dataset.view) return;  // 闈炶鍥鹃摼鎺ワ紙濡傞€€鍑虹櫥褰曪級姝ｅ父璺宠浆
+  if (!link.dataset.view) return;
   event.preventDefault();
-  switchView(link.dataset.view, link);
-  if (link.dataset.scrollTarget) {
-    document.getElementById(link.dataset.scrollTarget).scrollIntoView({behavior: 'smooth', block: 'start'});
-  }
+  const menu = link.closest('details');
+  if (menu) menu.open = false;
+  const pane = link.closest('.tabbar') ? (link.dataset.pane || null) : null;
+  switchView(link.dataset.view, link, pane);
 }));
+
+document.querySelectorAll('#add-segment [data-pane]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const tab = document.querySelector('.tabbar [data-pane]');
+    switchView(button.dataset.view, tab, button.dataset.pane);
+  });
+});
+
+const stageBack = document.getElementById('stage-back');
+if (stageBack) {
+  stageBack.addEventListener('click', () => switchView('view-playlist'));
+}
+
+window.addEventListener('scroll', () => {
+  document.body.classList.toggle('is-scrolled', window.scrollY > 12);
+}, {passive: true});
 
 // Default to the playlist view.
 switchView('view-playlist');
