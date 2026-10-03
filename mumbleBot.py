@@ -770,13 +770,28 @@ def start_web_interface(addr, port):
 
     interface.init_proxy()
     interface.web.env = 'development'
-    session_secret = var.config.get('webinterface', 'session_secret', fallback='').strip()
-    if not session_secret:
-        session_secret = var.config.get('webinterface', 'flask_secret', fallback='').strip()
-    if not session_secret:
-        session_secret = secrets.token_hex(32)
-    interface.web.secret_key = session_secret
+    interface.web.secret_key = _web_session_secret()
     interface.web.run(port=port, host=addr)
+
+
+def _web_session_secret():
+    """Return a signing key that stays the same across bot restarts."""
+    configured = var.config.get('webinterface', 'session_secret', fallback='').strip()
+    if configured:
+        return configured
+
+    flask_secret = var.config.get('webinterface', 'flask_secret', fallback='').strip()
+    if flask_secret and flask_secret != 'ChangeThisPassword':
+        return flask_secret
+
+    stored = (var.db.get('webinterface', 'session_secret', fallback='') or '').strip()
+    if stored:
+        return stored
+
+    stored = secrets.token_hex(32)
+    var.db.set('webinterface', 'session_secret', stored)
+    logging.getLogger('bot').info('web: saved a persistent session secret.')
+    return stored
 
 
 if __name__ == '__main__':

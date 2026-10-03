@@ -31,6 +31,7 @@ import logging
 import time
 import requests
 import secrets
+from datetime import timedelta
 
 
 class ReverseProxied(object):
@@ -73,10 +74,11 @@ class ReverseProxied(object):
 
 root_dir = os.path.dirname(__file__)
 web = Flask(__name__, template_folder=os.path.join(root_dir, "web/templates"))
-# A random fallback keeps session signing safe when no persistent secret is configured.
+# Replaced in start_web_interface with a stable secret so cookies survive restarts.
 web.secret_key = secrets.token_hex(32)
 web.config['SESSION_COOKIE_HTTPONLY'] = True
 web.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
+web.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 #web.config['TEMPLATES_AUTO_RELOAD'] = True
 log = logging.getLogger("bot")
 user = 'Remote Control'
@@ -87,6 +89,17 @@ def init_proxy():
     global web
     if var.is_proxified:
         web.wsgi_app = ReverseProxied(web.wsgi_app)
+
+
+def _remember_login():
+    """Keep the login cookie after the client process exits."""
+    session.permanent = True
+
+
+@web.before_request
+def _extend_login_cookie():
+    if session.get('user'):
+        _remember_login()
 
 
 # https://stackoverflow.com/questions/29725217/password-protect-one-webpage-in-flask-app
@@ -230,6 +243,7 @@ def requires_auth(f):
                         token_user, ip)
                     session['token'] = token
                     session['user'] = token_user
+                    _remember_login()
                     return f(*args, **kwargs)
 
             _record_failed_access(ip)
@@ -311,6 +325,7 @@ def login():
         _reset_failed_access(ip)
         session.clear()
         session['user'] = username
+        _remember_login()
         return redirect('/')
 
     return _render_login_page()
