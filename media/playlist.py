@@ -6,7 +6,7 @@ import time
 
 import variables as var
 from media.cache import (CachedItemWrapper, ItemNotCachedError,
-                         get_cached_wrapper_from_dict, get_cached_wrapper_by_id)
+                         get_cached_wrapper_from_dict)
 from database import Condition
 from media.item import ValidationFailedError, PreparationFailedError
 
@@ -192,18 +192,19 @@ class BasePlaylist(list):
         with self.playlist_lock:
             self.version += 1
             self.current_index = -1
+            self.pending_items.clear()
             super().clear()
 
         var.cache.free_all()
 
     def save(self):
         with self.playlist_lock:
-            var.db.remove_section("playlist_item")
             assert self.current_index is not None
-            var.db.set("playlist", "current_index", self.current_index)
-
-            for index, music in enumerate(self):
-                var.db.set("playlist_item", str(index), json.dumps({'id': music.id, 'user': music.user}))
+            items = [
+                (index, json.dumps({'id': music.id, 'user': music.user}))
+                for index, music in enumerate(self)
+            ]
+            var.db.save_playlist(self.current_index, items)
 
     def load(self):
         current_index = var.db.getint("playlist", "current_index", fallback=-1)
@@ -211,15 +212,24 @@ class BasePlaylist(list):
             return
 
         items = var.db.items("playlist_item")
-        if items:
-            music_wrappers = []
-            items.sort(key=lambda v: int(v[0]))
-            for item in items:
-                item = json.loads(item[1])
-                music_wrapper = get_cached_wrapper_by_id(item['id'], item['user'])
-                if music_wrapper:
-                    music_wrappers.append(music_wrapper)
-            self.from_list(music_wrappers, current_index)
+        if not items:
+            return
+
+        items.sort(key=lambda v: int(v[0]))
+        parsed = [json.loads(item[1]) for item in items]
+        found = {
+            music['id']: music
+            for music in var.music_db.query_music_by_ids([item['id'] for item in parsed])
+        }
+        music_wrappers = []
+        for item in parsed:
+            music_dict = found.get(item['id'])
+            if not music_dict:
+                continue
+            music_wrapper = get_cached_wrapper_from_dict(music_dict, item['user'])
+            if music_wrapper:
+                music_wrappers.append(music_wrapper)
+        self.from_list(music_wrappers, current_index)
 
     def _debug_print(self):
         print("===== Playlist(%d) =====" % self.current_index)
@@ -240,6 +250,7 @@ class BasePlaylist(list):
     def _check_valid(self):
         self.log.debug("playlist: start validating...")
         self.validating_thread_lock.acquire()
+        changed = False
         while len(self.pending_items) > 0:
             item = self.pending_items.pop()
             try:
@@ -265,7 +276,12 @@ class BasePlaylist(list):
                 continue
 
             if item.version > ver:
-                self.version += 1
+                changed = True
+
+        # One refresh for the whole batch. Per-track bumps made the web
+        # panel rebuild the queue once per song.
+        if changed:
+            self.version += 1
 
         self.log.debug("playlist: validating finished.")
         self.validating_thread_lock.release()

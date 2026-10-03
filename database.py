@@ -258,6 +258,26 @@ class SettingsDatabase:
         conn.commit()
         conn.close()
 
+    def save_playlist(self, current_index, items):
+        """Replace the saved queue and its index in one transaction.
+
+        items is a list of (index, json) pairs. One statement per row, not one
+        connection per row.
+        """
+        conn = sqlite3.connect(self.db_path)
+        try:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM botamusique WHERE section=?", ("playlist_item",))
+            cursor.executemany(
+                "INSERT OR REPLACE INTO botamusique (section, option, value) VALUES (?, ?, ?)",
+                [("playlist_item", str(index), value) for index, value in items])
+            cursor.execute(
+                "INSERT OR REPLACE INTO botamusique (section, option, value) VALUES (?, ?, ?)",
+                ("playlist", "current_index", str(current_index)))
+            conn.commit()
+        finally:
+            conn.close()
+
     def items(self, section):
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
@@ -402,6 +422,52 @@ class MusicDatabase:
             return results[0]
         else:
             return None
+
+    def query_music_by_ids(self, ids):
+        """Load many tracks in chunks instead of one query per id."""
+        if not ids:
+            return []
+        unique_ids = list(dict.fromkeys(ids))
+        conn = sqlite3.connect(self.db_path)
+        try:
+            found = []
+            for start in range(0, len(unique_ids), 400):
+                chunk = unique_ids[start:start + 400]
+                placeholders = ",".join("?" * len(chunk))
+                rows = conn.execute(
+                    "SELECT id, type, title, metadata, tags, path, keywords FROM music "
+                    "WHERE id != 'info' AND id IN (%s)" % placeholders,
+                    chunk).fetchall()
+                found.extend(self._result_to_dict(rows))
+            return found
+        finally:
+            conn.close()
+
+    def insert_music_many(self, music_dicts):
+        if not music_dicts:
+            return
+        conn = sqlite3.connect(self.db_path)
+        try:
+            for music_dict in music_dicts:
+                self.insert_music(music_dict, conn)
+            conn.commit()
+        finally:
+            conn.close()
+
+    def delete_music_by_ids(self, ids):
+        if not ids:
+            return
+        conn = sqlite3.connect(self.db_path)
+        try:
+            for start in range(0, len(ids), 400):
+                chunk = ids[start:start + 400]
+                placeholders = ",".join("?" * len(chunk))
+                conn.execute(
+                    "DELETE FROM music WHERE id IN (%s)" % placeholders,
+                    chunk)
+            conn.commit()
+        finally:
+            conn.close()
 
     def query_music_by_keywords(self, keywords, _conn=None):
         condition = Condition()
@@ -669,7 +735,7 @@ class DatabaseMigration:
                     tags.append(tag)
             item['tags'] = tags
 
-            self.music_db.insert_music(item)
+            self.music_db.insert_music(item, conn)
         conn.commit()
 
         return 2  # return new version number
@@ -682,7 +748,7 @@ class DatabaseMigration:
             if item['type'] == 'url' or item['type'] == "url_from_playlist":
                 item['duration'] = item['duration'] * 60
 
-            self.music_db.insert_music(item)
+            self.music_db.insert_music(item, conn)
         conn.commit()
 
         return 4  # return new version number

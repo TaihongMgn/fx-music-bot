@@ -484,7 +484,6 @@ class MumbleBot:
                 tr('download_in_progress', item=item.format_title()))
 
     def _download(self, item):
-        ver = item.version
         try:
             item.validate()
             if item.is_ready():
@@ -497,8 +496,8 @@ class MumbleBot:
 
         try:
             item.prepare()
-            if item.version > ver:
-                var.playlist.version += 1
+            # Item metadata is saved by the wrapper. Do not bump the playlist
+            # version here: that rebuilds the web queue after every download.
             return True
         except PreparationFailedError as e:
             self.send_channel_msg(e.msg)
@@ -706,6 +705,7 @@ class MumbleBot:
     def clear(self):
         # Kill the ffmpeg thread and empty the playlist
         self.interrupt()
+        self.last_ffmpeg_err = ""
         var.playlist.clear()
         self.wait_for_ready = False
         self.log.info("bot: music stopped. playlist trashed.")

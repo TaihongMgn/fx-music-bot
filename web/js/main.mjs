@@ -164,56 +164,53 @@ function displayPlaylist(data) {
   if (typeof data.ver === 'number') {
     playlist_ver = data.ver;
   }
-  playlist_table.animate({
-    opacity: 0,
-  }, 200, function() {
-    playlist_loading.hide();
-    $('.playlist-item').remove();
-    const items = data.items;
-    const length = data.length;
-    if (items.length === 0) {
-      playlist_empty.removeClass('d-none');
-      playlist_table.animate({opacity: 1}, 200);
-      return;
-    }
-    playlist_items = {};
-    for (const i in items) {
-      playlist_items[items[i].index] = items[i];
-    }
-    const start_from = data.start_from;
-    playlist_range_from = start_from;
-    playlist_range_to = start_from + items.length - 1;
-
-    if (items.length < length && start_from > 0) {
-      let _from = start_from - 5;
-      _from = _from > 0 ? _from : 0;
-      const _to = start_from - 1;
-      if (_to > 0) {
-        insertExpandPrompt(_from, start_from + length - 1, _from, _to, length);
-      }
-    }
-
-    items.forEach(
-        function(item) {
-          addPlaylistItem(item);
-        },
-    );
-
-    if (items.length < length && start_from + items.length < length) {
-      const _from = start_from + items.length;
-      let _to = start_from + items.length - 1 + 10;
-      _to = _to < length - 1 ? _to : length - 1;
-      if (start_from + items.length < _to) {
-        insertExpandPrompt(start_from, _to, _from, _to, length);
-      }
-    }
-
+  playlist_table.stop(true, true).css('opacity', 1);
+  playlist_loading.hide();
+  $('.playlist-item').remove();
+  const items = data.items;
+  const length = data.length;
+  if (items.length === 0) {
+    playlist_empty.removeClass('d-none');
     playlist_current_index = data.current_index;
-    displayActiveItem(data.current_index);
-    updatePlayerInfo(playlist_items[data.current_index]);
-    bindPlaylistEvent();
-    playlist_table.animate({opacity: 1}, 200);
-  });
+    return;
+  }
+  playlist_empty.addClass('d-none');
+  playlist_items = {};
+  for (const i in items) {
+    playlist_items[items[i].index] = items[i];
+  }
+  const start_from = data.start_from;
+  playlist_range_from = start_from;
+  playlist_range_to = start_from + items.length - 1;
+
+  if (items.length < length && start_from > 0) {
+    let _from = start_from - 5;
+    _from = _from > 0 ? _from : 0;
+    const _to = start_from - 1;
+    if (_to > 0) {
+      insertExpandPrompt(_from, start_from + length - 1, _from, _to, length);
+    }
+  }
+
+  items.forEach(
+      function(item) {
+        addPlaylistItem(item);
+      },
+  );
+
+  if (items.length < length && start_from + items.length < length) {
+    const _from = start_from + items.length;
+    let _to = start_from + items.length - 1 + 10;
+    _to = _to < length - 1 ? _to : length - 1;
+    if (start_from + items.length < _to) {
+      insertExpandPrompt(start_from, _to, _from, _to, length);
+    }
+  }
+
+  playlist_current_index = data.current_index;
+  displayActiveItem(data.current_index);
+  updatePlayerInfo(playlist_items[data.current_index]);
+  bindPlaylistEvent();
 }
 
 function displayActiveItem(current_index) {
@@ -241,31 +238,41 @@ function insertExpandPrompt(real_from, real_to, display_from, display_to, total_
   });
 }
 
+let playlistRefreshRunning = false;
+let playlistRefreshQueued = false;
+
 function updatePlaylist() {
-  playlist_table.animate({
-    opacity: 0,
-  }, 200, function() {
+  if (playlistRefreshRunning) {
+    playlistRefreshQueued = true;
+    return;
+  }
+  playlistRefreshRunning = true;
+  playlist_table.stop(true, true).css('opacity', 1);
+  if (!$('.playlist-item').length) {
     playlist_empty.addClass('d-none');
     playlist_loading.show();
-    playlist_table.find('.playlist-item').css('opacity', 0);
-    let data = {};
-    if (!(playlist_range_from === 0 && playlist_range_to === 0)) {
-      data = {
-        range_from: playlist_range_from,
-        range_to: playlist_range_to,
-      };
-    }
-    $.ajax({
-      type: 'GET',
-      url: 'playlist',
-      data: data,
-      statusCode: {
-        200: displayPlaylist,
-      },
-    });
-    playlist_table.animate({
-      opacity: 1,
-    }, 200);
+  }
+  let data = {};
+  if (!(playlist_range_from === 0 && playlist_range_to === 0)) {
+    data = {
+      range_from: playlist_range_from,
+      range_to: playlist_range_to,
+    };
+  }
+  $.ajax({
+    type: 'GET',
+    url: 'playlist',
+    data: data,
+    statusCode: {
+      200: displayPlaylist,
+    },
+    complete: function() {
+      playlistRefreshRunning = false;
+      if (playlistRefreshQueued) {
+        playlistRefreshQueued = false;
+        updatePlaylist();
+      }
+    },
   });
 }
 
@@ -280,8 +287,7 @@ function checkForPlaylistUpdate() {
           playlist_range_from = 0;
           playlist_range_to = 0;
           updatePlaylist();
-        }
-        if (data.current_index !== playlist_current_index) {
+        } else if (data.current_index !== playlist_current_index) {
           if (data.current_index !== -1) {
             if ((data.current_index > playlist_range_to || data.current_index < playlist_range_from)) {
               playlist_current_index = data.current_index;
@@ -355,19 +361,19 @@ function updateControls(empty, play, mode, volume) {
   }
   playModeIndicator.addClass(playModeIcon[mode]);
 
-  if (volume !== last_volume) {
-    last_volume = volume;
-    if (volume > 1) {
-      volumeSlider.value = 1;
-    } else if (volume < 0) {
-      volumeSlider.value = 0;
-    } else {
-      volumeSlider.value = volume;
-    }
-    if (playerVolumeSlider) {
-      playerVolumeSlider.value = volumeSlider.value;
-    }
-  }
+  applyRemoteVolume(volume);
+}
+
+function applyRemoteVolume(volume) {
+  if (volumeAdjusting || volumePending) return;
+  const next = Number(volume);
+  if (!Number.isFinite(next)) return;
+  const clamped = Math.min(1, Math.max(0, next));
+  if (Math.abs(clamped - Number(last_volume)) < 0.005) return;
+  last_volume = clamped;
+  const shown = String(clamped);
+  volumeSlider.value = shown;
+  if (playerVolumeSlider) playerVolumeSlider.value = shown;
 }
 
 function togglePlayPause() {
@@ -920,6 +926,47 @@ const volumePopoverDiv = document.getElementById('volume-popover');
 let volume_popover_instance = null;
 let volume_popover_show = false;
 let volume_update_timer;
+let volumeAdjusting = false;
+let volumePending = false;
+
+let volumeDragBound = false;
+
+function bindVolumeDrag(slider) {
+  if (!slider) return;
+  if (!volumeDragBound) {
+    volumeDragBound = true;
+    const release = () => {
+      volumeAdjusting = false;
+    };
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+  }
+  slider.addEventListener('pointerdown', (event) => {
+    volumeAdjusting = true;
+    if (slider.setPointerCapture) slider.setPointerCapture(event.pointerId);
+  });
+}
+
+function queueVolume(value) {
+  const next = Math.min(1, Math.max(0, Number(value)));
+  if (!Number.isFinite(next)) return;
+  last_volume = next;
+  volumeSlider.value = String(next);
+  if (playerVolumeSlider) playerVolumeSlider.value = String(next);
+  volumePending = true;
+  window.clearTimeout(volume_update_timer);
+  volume_update_timer = window.setTimeout(() => {
+    request('post', {
+      action: 'volume_set_value',
+      new_volume: next,
+    }).always(() => {
+      volumePending = false;
+    });
+  }, 150);
+}
+
+bindVolumeDrag(volumeSlider);
+bindVolumeDrag(playerVolumeSlider);
 
 volumePopoverBtn.addEventListener('click', function(e) {
   e.stopPropagation();
@@ -959,20 +1006,12 @@ volumePopoverBtn.addEventListener('click', function(e) {
   e.stopPropagation();
 });
 
-playerVolumeSlider.addEventListener('change', (e) => {
-  volumeSlider.value = e.target.value;
-  volumeSlider.dispatchEvent(new Event('change'));
+playerVolumeSlider.addEventListener('input', (e) => {
+  queueVolume(e.target.value);
 });
 
-volumeSlider.addEventListener('change', (e) => {
-  window.clearTimeout(volume_update_timer);
-
-  volume_update_timer = window.setTimeout(() => {
-    request('post', {
-      action: 'volume_set_value',
-      new_volume: volumeSlider.value,
-    });
-  }, 500); // delay in milliseconds
+volumeSlider.addEventListener('input', (e) => {
+  queueVolume(e.target.value);
 });
 
 document.getElementById('volume-down-btn').addEventListener('click', () => {
@@ -1808,12 +1847,15 @@ function showNeteasePlaylistAlert(kind, message) {
     `<div class="alert alert-${kind}">${message}</div>`);
 }
 
-function addNeteasePlaylistSongs(songs) {
+function addNeteasePlaylistSongs(songs, replace = false) {
   if (!songs.length) {
-    showNeteasePlaylistAlert('warning', neteasePlaylistLabel('noneSelectedLabel'));
+    showNeteasePlaylistAlert('warning', neteasePlaylistLabel(replace ? 'noneAddedLabel' : 'noneSelectedLabel'));
     return;
   }
-  request('post', {add_netease_songs: JSON.stringify(songs)}).done((data) => {
+  const payload = replace
+    ? {replace_netease_songs: JSON.stringify(songs)}
+    : {add_netease_songs: JSON.stringify(songs)};
+  request('post', payload).done((data) => {
     refreshPlaylistAfterNeteasePlayback();
     loadNeteaseAccount();
     const added = data.added || 0;
@@ -1822,9 +1864,16 @@ function addNeteasePlaylistSongs(songs) {
       showNeteasePlaylistAlert('warning', neteasePlaylistLabel('noneAddedLabel'));
       return;
     }
-    const message = skipped
-      ? neteasePlaylistLabel('addedDetailLabel').replace('{count}', added).replace('{skipped}', skipped)
-      : neteasePlaylistLabel('addedLabel').replace('{count}', added);
+    let message;
+    if (replace) {
+      message = skipped
+        ? neteasePlaylistLabel('replacedDetailLabel').replace('{count}', added).replace('{skipped}', skipped)
+        : neteasePlaylistLabel('replacedLabel').replace('{count}', added);
+    } else {
+      message = skipped
+        ? neteasePlaylistLabel('addedDetailLabel').replace('{count}', added).replace('{skipped}', skipped)
+        : neteasePlaylistLabel('addedLabel').replace('{count}', added);
+    }
     showNeteasePlaylistAlert('info', message);
   }).fail(() => {
     showNeteasePlaylistAlert('danger', neteasePlaylistLabel('errorLabel'));
@@ -1950,6 +1999,7 @@ function renderNeteasePlaylist(playlist) {
     <div class="mb-2">
       <button type="button" class="btn btn-sm btn-primary netease-playlist-add-selected-btn">${neteasePlaylistLabel('addSelectedLabel')}</button>
       <button type="button" class="btn btn-sm btn-outline-secondary ml-2 netease-playlist-add-all-btn">${neteasePlaylistLabel('addAllLabel')}</button>
+      <button type="button" class="btn btn-sm btn-outline-danger ml-2 netease-playlist-replace-btn">${neteasePlaylistLabel('replaceLabel')}</button>
       <button type="button" class="btn btn-sm btn-secondary ml-2 netease-playlist-save-btn">${neteasePlaylistLabel('saveLabel')}</button>
       <label class="ml-3 mb-0">
         <input type="checkbox" class="netease-playlist-select-all mr-1">
@@ -1980,6 +2030,9 @@ function renderNeteasePlaylist(playlist) {
   });
   neteasePlaylistResult.querySelector('.netease-playlist-add-all-btn').addEventListener('click', () => {
     addNeteasePlaylistSongs(neteaseSongsFromChecks(trackChecks()));
+  });
+  neteasePlaylistResult.querySelector('.netease-playlist-replace-btn').addEventListener('click', () => {
+    addNeteasePlaylistSongs(neteaseSongsFromChecks(trackChecks()), true);
   });
   neteasePlaylistResult.querySelector('.netease-playlist-save-btn').addEventListener('click', () => {
     const savedData = {

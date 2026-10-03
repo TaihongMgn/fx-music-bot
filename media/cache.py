@@ -111,28 +111,31 @@ class MusicCache(dict):
         self.clear()
 
     def build_dir_cache(self):
-        self.dir_lock.acquire()
-        self.log.info("library: rebuild directory cache")
-        files = util.get_recursive_file_list_sorted(var.music_folder)
+        with self.dir_lock:
+            self.log.info("library: rebuild directory cache")
+            files = util.get_recursive_file_list_sorted(var.music_folder)
+            on_disk = set(files)
 
-        # remove deleted files
-        results = self.db.query_music(Condition().or_equal('type', 'file'))
-        for result in results:
-            if result['path'] not in files:
-                self.log.debug("library: music file missed: %s, delete from library." % result['path'])
-                self.db.delete_music(Condition().and_equal('id', result['id']))
-            else:
-                files.remove(result['path'])
+            stored = self.db.query_music(Condition().or_equal('type', 'file'))
+            stored_paths = set()
+            missing_ids = []
+            for result in stored:
+                if result['path'] not in on_disk:
+                    self.log.debug("library: music file missed: %s, delete from library." % result['path'])
+                    missing_ids.append(result['id'])
+                else:
+                    stored_paths.add(result['path'])
+            self.db.delete_music_by_ids(missing_ids)
 
-        for file in files:
-            results = self.db.query_music(Condition().and_equal('path', file))
-            if not results:
+            new_items = []
+            for file in files:
+                if file in stored_paths:
+                    continue
                 item = item_builders['file'](path=file)
                 self.log.debug("library: music save into database: %s" % item.format_debug_string())
-                self.db.insert_music(item.to_dict())
-
-        self.db.manage_special_tags()
-        self.dir_lock.release()
+                new_items.append(item.to_dict())
+            self.db.insert_music_many(new_items)
+            self.db.manage_special_tags()
 
 
 class CachedItemWrapper:

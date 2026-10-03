@@ -547,7 +547,8 @@ def playlist():
         'items': items,
         'current_index': var.playlist.current_index,
         'length': len(var.playlist),
-        'start_from': _from
+        'start_from': _from,
+        'ver': var.playlist.version,
     })
 
 
@@ -1322,20 +1323,24 @@ def post():
             var.db.set('netease_playlists', playlist_id, json.dumps(saved_playlist, ensure_ascii=False))
             return jsonify({'ok': True})
 
-        elif 'add_netease_songs' in payload:
+        elif 'add_netease_songs' in payload or 'replace_netease_songs' in payload:
+            replace = 'replace_netease_songs' in payload
+            raw_songs = payload.get('replace_netease_songs') if replace else payload.get('add_netease_songs')
             try:
-                tracks = _parse_netease_song_list(payload['add_netease_songs'])
+                tracks = _parse_netease_song_list(raw_songs)
             except (TypeError, ValueError):
                 abort(400)
             if not tracks:
                 abort(400)
             try:
                 client, cookie = _get_netease_client_and_cookie()
+                if replace:
+                    var.bot.clear()
                 added, skipped = _add_netease_tracks(client, cookie, tracks, user)
             except (requests.RequestException, ValueError, TypeError):
                 log.exception("web: Netease selected songs failed")
                 return jsonify({'error': tr_web('netease_playlist_error')}), 502
-            return jsonify({'added': added, 'skipped': skipped})
+            return jsonify({'added': added, 'skipped': skipped, 'replaced': replace})
 
         elif 'play_netease_playlist' in payload or 'play_netease_playlist_url' in payload:
             playlist_id = payload.get('play_netease_playlist') or payload.get('play_netease_playlist_url')
@@ -1352,7 +1357,7 @@ def post():
                     tracks = saved_playlist.get('songs') or []
                 else:
                     tracks = client.get_playlist_tracks(playlist_id)
-                var.playlist.clear()
+                var.bot.clear()
                 added, skipped = _add_netease_tracks(client, cookie, tracks, user)
             except (requests.RequestException, ValueError, TypeError):
                 log.exception("web: Netease playlist playback failed")
@@ -1472,9 +1477,9 @@ def post():
                 log.info("web: volume up to %d" % (var.bot.volume_helper.plain_volume_set * 100))
             elif action == "volume_down":
                 if var.bot.volume_helper.plain_volume_set - 0.03 > 0:
-                    var.bot.volume_helper.set_volume(var.bot.unconverted_volume - 0.03)
+                    var.bot.volume_helper.set_volume(var.bot.volume_helper.plain_volume_set - 0.03)
                 else:
-                    var.bot.volume_helper.set_volume(1.0)
+                    var.bot.volume_helper.set_volume(0)
                 var.db.set('bot', 'volume', str(var.bot.volume_helper.plain_volume_set))
                 log.info("web: volume down to %d" % (var.bot.volume_helper.plain_volume_set * 100))
             elif action == "volume_set_value":
