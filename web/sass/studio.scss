@@ -920,17 +920,43 @@ input[type="radio"] {
     }
 
     #playlist .table-responsive,
-    #playlist .table {
+    #playlist .table,
+    #playlist .playlist-table {
+        display: block;
         width: 100%;
         max-width: 100%;
     }
 
-    #playlist .table {
-        table-layout: fixed;
+    #playlist .playlist-item,
+    #playlist #playlist-loading,
+    #playlist #playlist-empty,
+    #playlist .playlist-expand {
+        display: flex;
+        align-items: center;
+        width: 100%;
+    }
+
+    #playlist .playlist-item > td:nth-child(2) {
+        flex: 1 1 auto;
+        width: auto;
+        min-width: 0;
     }
 
     #playlist .playlist-item > td:nth-child(3) {
-        width: 92px;
+        flex: 0 0 auto;
+        width: auto;
+    }
+
+    #playlist .playlist-item > td:nth-child(3) .btn-group {
+        display: flex;
+        flex-wrap: nowrap;
+    }
+
+    #playlist #playlist-loading > td,
+    #playlist #playlist-empty > td,
+    #playlist .playlist-expand > td {
+        flex: 1 1 auto;
+        width: 100%;
     }
 
     #playlist .table td,
