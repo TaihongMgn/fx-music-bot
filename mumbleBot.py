@@ -738,20 +738,36 @@ class MumbleBot:
             self.log.info(f"bot: music paused at {self.playhead:.2f} seconds.")
 
     def resume(self):
-        self.is_pause = False
-        if var.playlist.current_index == -1:
-            var.playlist.next()
-            self.playhead = 0
+        if len(var.playlist) == 0:
             return
 
-        music_wrapper = var.playlist.current_item()
-
-        if not music_wrapper or not music_wrapper.id == self.pause_at_id or not music_wrapper.is_ready():
+        # Arm the loop before leaving pause. Otherwise it treats the missing
+        # ffmpeg process as "the song ended" and calls next(), which in
+        # one-shot mode deletes the track now under the cursor.
+        if var.playlist.current_index < 0 or var.playlist.current_index >= len(var.playlist):
+            # Point at the first track. next() only deletes the current one
+            # when the cursor is already on a real item.
+            var.playlist.current_index = -1
+            if not var.playlist.next():
+                return
             self.playhead = 0
-            return
+            self.song_start_at = -1
+        else:
+            music_wrapper = var.playlist.current_item()
+            if not music_wrapper:
+                return
+            # The paused track was removed. The item now at the cursor is the
+            # one to play; do not advance past it.
+            if not self.pause_at_id or music_wrapper.id != self.pause_at_id:
+                self.playhead = 0
+                self.song_start_at = -1
 
-        self.wait_for_ready = True
         self.pause_at_id = ""
+        current = var.playlist.current_item()
+        if current:
+            self.start_download(current)
+        self.wait_for_ready = True
+        self.is_pause = False
 
 
 def start_web_interface(addr, port):
